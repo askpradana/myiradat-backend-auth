@@ -3,16 +3,17 @@ package auth
 import "time"
 
 type Profile struct {
-	ID         int    `gorm:"primaryKey;autoIncrement"`
-	Name       string `gorm:"size:255"`
-	Email      string `gorm:"size:255;unique;not null"`
-	NoHP       string `gorm:"size:255"`
-	Password   string `gorm:"size:255;not null"`
-	IsDeleted  bool
-	CreatedAt  time.Time
-	CreatedBy  string
-	ModifiedAt time.Time
-	ModifiedBy string
+	ID           uint   `gorm:"primaryKey;autoIncrement"`
+	Name         string `gorm:"size:255"`
+	Email        string `gorm:"size:255;unique;not null"`
+	NoHP         string `gorm:"size:255"`
+	Password     string `gorm:"size:255;not null"`
+	RefreshToken string `gorm:"type:text"`
+	IsDeleted    bool
+	CreatedAt    time.Time
+	CreatedBy    string
+	ModifiedAt   time.Time
+	ModifiedBy   string
 }
 
 type ServiceModel struct {

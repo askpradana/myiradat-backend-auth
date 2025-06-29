@@ -10,8 +10,10 @@ type Repository interface {
 	CreateProfileWithRoles(profile *Profile, services []ServiceRoleRequest) error
 	IsEmailExist(email string) bool
 	FindProfileByEmail(user *Profile, email string) error
-	FindRolesByProfileID(profileID int) ([]ServiceRoleResponse, error)
+	FindRolesByProfileID(profileID uint) ([]ServiceRoleResponse, error)
 	UpdateUserPassword(user *Profile) error
+	UpdateRefreshToken(userID uint, refreshToken string) error
+	ClearRefreshTokenByEmail(email string) error
 }
 
 type repository struct {
@@ -73,7 +75,7 @@ func (r *repository) FindProfileByEmail(user *Profile, email string) error {
 		First(user).Error
 }
 
-func (r *repository) FindRolesByProfileID(profileID int) ([]ServiceRoleResponse, error) {
+func (r *repository) FindRolesByProfileID(profileID uint) ([]ServiceRoleResponse, error) {
 	var result []ServiceRoleResponse
 
 	err := r.db.Raw(`
@@ -94,4 +96,16 @@ func (r *repository) UpdateUserPassword(user *Profile) error {
 			"modified_at": user.ModifiedAt,
 			"modified_by": user.ModifiedBy,
 		}).Error
+}
+
+func (r *repository) UpdateRefreshToken(userID uint, refreshToken string) error {
+	return r.db.Model(&Profile{}).
+		Where("id = ?", userID).
+		Update("refresh_token", refreshToken).Error
+}
+
+func (r *repository) ClearRefreshTokenByEmail(email string) error {
+	return r.db.Model(&Profile{}).
+		Where("email = ?", email).
+		Update("refresh_token", "").Error
 }

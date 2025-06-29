@@ -22,7 +22,7 @@ func main() {
 
 	authRepo := auth.NewRepository(database.DB)
 	authService := auth.NewService(authRepo, jwtGenerator)
-	authHandler := auth.NewHandler(authService)
+	authHandler := auth.NewHandler(authService, jwtGenerator)
 
 	authGroup := r.Group("/auth")
 	{
@@ -30,6 +30,8 @@ func main() {
 		authGroup.POST("/login", authHandler.Login)
 		authGroup.POST("/refresh-token", authHandler.RefreshToken)
 		authGroup.POST("/change-password", authHandler.ChangePassword)
+		authGroup.POST("/logout", authHandler.Logout)
+
 		//untuk keperluan testing jangan di expose ke luar
 		//authGroup.POST("/validate-token", authHandler.ValidateToken)
 	}

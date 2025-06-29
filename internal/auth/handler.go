@@ -2,17 +2,22 @@ package auth
 
 import (
 	"github.com/gin-gonic/gin"
+	authmiddleware "myiradat-backend-auth/internal/middleware/auth"
 	"myiradat-backend-auth/internal/response"
 	"myiradat-backend-auth/internal/validation"
 	"strings"
 )
 
 type Handler struct {
-	service Service
+	service        Service
+	authMiddleware authmiddleware.IJwtTokenGenerator
 }
 
-func NewHandler(s Service) *Handler {
-	return &Handler{s}
+func NewHandler(s Service, auth authmiddleware.IJwtTokenGenerator) *Handler {
+	return &Handler{
+		service:        s,
+		authMiddleware: auth,
+	}
 }
 
 func (h *Handler) Register(c *gin.Context) {
@@ -106,6 +111,75 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	response.Success(c, resp)
 }
 
+func (h *Handler) ChangePassword(c *gin.Context) {
+	var req ChangePasswordRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, gin.H{"request": "invalid json format"})
+		return
+	}
+
+	if err := validation.Validate.Struct(req); err != nil {
+		response.Error(c, validation.ParseValidationErrors(err, req))
+		return
+	}
+
+	authHeader := c.GetHeader("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		response.Error(c, gin.H{"token": "missing or invalid authorization header"})
+		return
+	}
+	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+
+	claims, err := h.authMiddleware.ParseAccessToken(tokenStr)
+	if err != nil {
+		response.Error(c, gin.H{"token": "invalid or expired access token"})
+		return
+	}
+
+	errs, err := h.service.ChangePassword(req, claims.Email)
+	if len(errs) > 0 {
+		response.Error(c, errs)
+		return
+	}
+	if err != nil {
+		response.ServerError(c, "failed to change password")
+		return
+	}
+
+	response.Success(c, gin.H{"message": "password changed successfully"})
+}
+
+func (h *Handler) Logout(c *gin.Context) {
+	// Get Authorization header
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		response.Error(c, gin.H{"token": "missing or invalid authorization header"})
+		return
+	}
+	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+
+	// Parse access token to extract email
+	claims, err := h.authMiddleware.ParseAccessToken(tokenStr)
+	if err != nil {
+		response.Error(c, gin.H{"token": "invalid or expired access token"})
+		return
+	}
+
+	// Revoke refresh token from DB
+	errs, err := h.service.Logout(claims.Email)
+	if len(errs) > 0 {
+		response.Error(c, errs)
+		return
+	}
+	if err != nil {
+		response.ServerError(c, "failed to logout")
+		return
+	}
+
+	response.Success(c, gin.H{"message": "logout successful"})
+}
+
 func (h *Handler) ValidateToken(c *gin.Context) {
 	var req ValidateTokenRequest
 
@@ -131,38 +205,4 @@ func (h *Handler) ValidateToken(c *gin.Context) {
 	}
 
 	response.Success(c, data)
-}
-
-func (h *Handler) ChangePassword(c *gin.Context) {
-	var req ChangePasswordRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, gin.H{"request": "invalid json format"})
-		return
-	}
-
-	if err := validation.Validate.Struct(req); err != nil {
-		response.Error(c, validation.ParseValidationErrors(err, req))
-		return
-	}
-
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-		response.Error(c, gin.H{"token": "missing or invalid authorization header"})
-		return
-	}
-	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-
-	// pass to service
-	errs, err := h.service.ChangePassword(req, tokenStr)
-	if len(errs) > 0 {
-		response.Error(c, errs)
-		return
-	}
-	if err != nil {
-		response.ServerError(c, "internal server error")
-		return
-	}
-
-	response.Success(c, gin.H{"message": "password changed successfully"})
 }

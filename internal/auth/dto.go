@@ -15,7 +15,7 @@ type ServiceRoleRequest struct {
 }
 
 type RegisterResponse struct {
-	ID    int    `json:"id"`
+	ID    uint   `json:"id"`
 	Email string `json:"email"`
 }
 
