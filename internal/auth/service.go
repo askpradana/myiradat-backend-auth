@@ -12,6 +12,7 @@ type Service interface {
 	Register(input RegisterRequest) (RegisterResponse, map[string]string, error)
 	Login(input LoginRequest) (LoginResponse, map[string]string, error)
 	RefreshToken(refreshToken string) (RefreshTokenResponse, map[string]string, error)
+	ValidateToken(token string) (ValidateTokenResponse, map[string]string, error)
 }
 
 type service struct {
@@ -161,5 +162,25 @@ func (s *service) RefreshToken(refreshToken string) (RefreshTokenResponse, map[s
 	return RefreshTokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
+	}, nil, nil
+}
+
+func (s *service) ValidateToken(token string) (ValidateTokenResponse, map[string]string, error) {
+	claims, err := s.authMiddleware.ParseAccessToken(token)
+	if err != nil {
+		return ValidateTokenResponse{}, map[string]string{"token": "invalid or expired"}, nil
+	}
+
+	var tokenRoles []ServiceRoleResponse
+	for _, r := range claims.Services {
+		tokenRoles = append(tokenRoles, ServiceRoleResponse{
+			ServiceName: r.ServiceName,
+			RoleName:    r.RoleName,
+		})
+	}
+
+	return ValidateTokenResponse{
+		Email:    claims.Email,
+		Services: tokenRoles,
 	}, nil, nil
 }

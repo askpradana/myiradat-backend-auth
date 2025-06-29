@@ -42,3 +42,12 @@ type RefreshTokenResponse struct {
 	AccessToken  string `json:"accessToken"`
 	RefreshToken string `json:"refreshToken"`
 }
+
+type ValidateTokenRequest struct {
+	Token string `json:"token" validate:"required"`
+}
+
+type ValidateTokenResponse struct {
+	Email    string                `json:"email"`
+	Services []ServiceRoleResponse `json:"services"`
+}

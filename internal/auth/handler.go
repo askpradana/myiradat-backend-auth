@@ -104,3 +104,30 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 
 	response.Success(c, resp)
 }
+
+func (h *Handler) ValidateToken(c *gin.Context) {
+	var req ValidateTokenRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, gin.H{"token": "Invalid JSON body"})
+		return
+	}
+
+	if err := validation.Validate.Struct(req); err != nil {
+		errors := validation.ParseValidationErrors(err, req)
+		response.Error(c, errors)
+		return
+	}
+
+	data, fieldErrs, err := h.service.ValidateToken(req.Token)
+	if len(fieldErrs) > 0 {
+		response.Error(c, fieldErrs)
+		return
+	}
+	if err != nil {
+		response.ServerError(c, "Internal server error")
+		return
+	}
+
+	response.Success(c, data)
+}

@@ -5,6 +5,7 @@ import (
 	"myiradat-backend-auth/internal/auth"
 	"myiradat-backend-auth/internal/config"
 	"myiradat-backend-auth/internal/database"
+	authMiddleware "myiradat-backend-auth/internal/middleware/auth"
 	"myiradat-backend-auth/internal/validation"
 )
 
@@ -12,18 +13,24 @@ func main() {
 	config.LoadEnv()
 	database.InitDB()
 	validation.InitValidator()
-	jwt := config.InitAuth()
+
+	jwtConfig := config.InitJWTConfig()
+
+	jwtGenerator := authMiddleware.NewJWTGenerator(jwtConfig)
 
 	r := gin.Default()
 
-	// Auth DI
 	authRepo := auth.NewRepository(database.DB)
-	authService := auth.NewService(authRepo, jwt)
+	authService := auth.NewService(authRepo, jwtGenerator)
 	authHandler := auth.NewHandler(authService)
 
-	r.POST("/auth/register", authHandler.Register)
-	r.POST("/auth/login", authHandler.Login)
-	r.POST("/auth/refresh-token", authHandler.RefreshToken)
+	authGroup := r.Group("/auth")
+	{
+		authGroup.POST("/register", authHandler.Register)
+		authGroup.POST("/login", authHandler.Login)
+		authGroup.POST("/refresh-token", authHandler.RefreshToken)
+		authGroup.POST("/validate-token", authHandler.ValidateToken)
+	}
 
 	r.Run()
 }
