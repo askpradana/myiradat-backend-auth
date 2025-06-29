@@ -33,3 +33,12 @@ type ServiceRoleResponse struct {
 	ServiceName string `json:"serviceName"`
 	RoleName    string `json:"roleName"`
 }
+
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refreshToken" validate:"required"`
+}
+
+type RefreshTokenResponse struct {
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"`
+}

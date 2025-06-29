@@ -77,3 +77,30 @@ func (h *Handler) Login(c *gin.Context) {
 
 	response.Success(c, resp)
 }
+
+func (h *Handler) RefreshToken(c *gin.Context) {
+	var req RefreshTokenRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, gin.H{"refresh_token": "Invalid JSON body"})
+		return
+	}
+
+	if err := validation.Validate.Struct(req); err != nil {
+		errors := validation.ParseValidationErrors(err, req)
+		response.Error(c, errors)
+		return
+	}
+
+	resp, fieldErrs, err := h.service.RefreshToken(req.RefreshToken)
+	if len(fieldErrs) > 0 {
+		response.Error(c, fieldErrs)
+		return
+	}
+	if err != nil {
+		response.ServerError(c, "Internal server error")
+		return
+	}
+
+	response.Success(c, resp)
+}

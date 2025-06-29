@@ -11,14 +11,19 @@ import (
 type Service interface {
 	Register(input RegisterRequest) (RegisterResponse, map[string]string, error)
 	Login(input LoginRequest) (LoginResponse, map[string]string, error)
+	RefreshToken(refreshToken string) (RefreshTokenResponse, map[string]string, error)
 }
 
 type service struct {
-	repo Repository
+	repo           Repository
+	authMiddleware authmiddleware.IJwtTokenGenerator
 }
 
-func NewService(r Repository) Service {
-	return &service{repo: r}
+func NewService(r Repository, jwt authmiddleware.IJwtTokenGenerator) Service {
+	return &service{
+		repo:           r,
+		authMiddleware: jwt,
+	}
 }
 
 func (s *service) Register(input RegisterRequest) (RegisterResponse, map[string]string, error) {
@@ -97,12 +102,12 @@ func (s *service) Login(input LoginRequest) (LoginResponse, map[string]string, e
 	}
 
 	// 4. Build access token
-	token, err := authmiddleware.GenerateJWT(user.Email, tokenRoles)
+	token, err := s.authMiddleware.GenerateAccessToken(user.Email, tokenRoles)
 	if err != nil {
 		return LoginResponse{}, nil, err
 	}
 
-	refresh, err := authmiddleware.GenerateRefreshToken(user.Email)
+	refresh, err := s.authMiddleware.GenerateRefreshToken(user.Email)
 	if err != nil {
 		return LoginResponse{}, nil, err
 	}
@@ -110,5 +115,51 @@ func (s *service) Login(input LoginRequest) (LoginResponse, map[string]string, e
 	return LoginResponse{
 		AccessToken:  token,
 		RefreshToken: refresh,
+	}, nil, nil
+}
+
+func (s *service) RefreshToken(refreshToken string) (RefreshTokenResponse, map[string]string, error) {
+	// 1. Validate refresh token
+	claims, err := s.authMiddleware.ParseRefreshToken(refreshToken)
+	if err != nil {
+		return RefreshTokenResponse{}, map[string]string{"refresh_token": "Invalid or expired refresh token"}, nil
+	}
+
+	// 2. Get user
+	var user Profile
+	err = s.repo.FindProfileByEmail(&user, claims.Email)
+	if err != nil {
+		return RefreshTokenResponse{}, nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	// 3. Get roles for the user (optional, for access token payload)
+	roles, err := s.repo.FindRolesByProfileID(user.ID)
+	if err != nil {
+		return RefreshTokenResponse{}, nil, fmt.Errorf("failed to load roles: %w", err)
+	}
+
+	var tokenRoles []authmiddleware.TokenServiceRole
+	for _, r := range roles {
+		tokenRoles = append(tokenRoles, authmiddleware.TokenServiceRole{
+			ServiceName: r.ServiceName,
+			RoleName:    r.RoleName,
+		})
+	}
+
+	// 4. Generate new tokens
+	accessToken, err := s.authMiddleware.GenerateAccessToken(user.Email, tokenRoles)
+	if err != nil {
+		return RefreshTokenResponse{}, nil, fmt.Errorf("failed to generate access token: %w", err)
+	}
+
+	newRefreshToken, err := s.authMiddleware.GenerateRefreshToken(user.Email)
+	if err != nil {
+		return RefreshTokenResponse{}, nil, fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	// 5. Return both
+	return RefreshTokenResponse{
+		AccessToken:  accessToken,
+		RefreshToken: newRefreshToken,
 	}, nil, nil
 }

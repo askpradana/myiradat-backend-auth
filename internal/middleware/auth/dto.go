@@ -1,6 +1,10 @@
 package auth
 
 type TokenServiceRole struct {
-	ServiceName string `json:"serviceName"`
-	RoleName    string `json:"roleName"`
+	ServiceName string
+	RoleName    string
+}
+
+type RefreshTokenClaims struct {
+	Email string
 }
