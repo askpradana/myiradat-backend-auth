@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	authmiddleware "myiradat-backend-auth/internal/middleware/auth"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -9,6 +10,7 @@ import (
 
 type Service interface {
 	Register(input RegisterRequest) (RegisterResponse, map[string]string, error)
+	Login(input LoginRequest) (LoginResponse, map[string]string, error)
 }
 
 type service struct {
@@ -61,5 +63,52 @@ func (s *service) Register(input RegisterRequest) (RegisterResponse, map[string]
 	return RegisterResponse{
 		ID:    profile.ID,
 		Email: profile.Email,
+	}, nil, nil
+}
+
+func (s *service) Login(input LoginRequest) (LoginResponse, map[string]string, error) {
+	errs := make(map[string]string)
+
+	// 1. Find user
+	var user Profile
+	if err := s.repo.FindProfileByEmail(&user, input.Email); err != nil {
+		errs["email"] = "email not found"
+		return LoginResponse{}, errs, nil
+	}
+
+	// 2. Compare passwords
+	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)) != nil {
+		errs["password"] = "invalid password"
+		return LoginResponse{}, errs, nil
+	}
+
+	// 3. Get roles & services
+	roles, err := s.repo.FindRolesByProfileID(user.ID)
+	if err != nil {
+		return LoginResponse{}, nil, err
+	}
+
+	tokenRoles := make([]authmiddleware.TokenServiceRole, len(roles))
+	for i, r := range roles {
+		tokenRoles[i] = authmiddleware.TokenServiceRole{
+			ServiceName: r.ServiceName,
+			RoleName:    r.RoleName,
+		}
+	}
+
+	// 4. Build access token
+	token, err := authmiddleware.GenerateJWT(user.Email, tokenRoles)
+	if err != nil {
+		return LoginResponse{}, nil, err
+	}
+
+	refresh, err := authmiddleware.GenerateRefreshToken(user.Email)
+	if err != nil {
+		return LoginResponse{}, nil, err
+	}
+
+	return LoginResponse{
+		AccessToken:  token,
+		RefreshToken: refresh,
 	}, nil, nil
 }

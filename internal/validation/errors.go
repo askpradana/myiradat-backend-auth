@@ -1,41 +1,69 @@
 package validation
 
 import (
+	"errors"
+	"reflect"
+	"strings"
+
 	"github.com/go-playground/validator/v10"
 )
 
-func ParseValidationErrors(err error) map[string]string {
-	errors := make(map[string]string)
+func ParseValidationErrors(err error, input interface{}) map[string]string {
+	errorsMap := make(map[string]string)
 
-	if err == nil {
-		return errors
+	var validationErrors validator.ValidationErrors
+	if !errors.As(err, &validationErrors) {
+		errorsMap["message"] = err.Error()
+		return errorsMap
 	}
 
-	// Only handle validator.ValidationErrors
-	if validationErrors, ok := err.(validator.ValidationErrors); ok {
-		for _, fieldErr := range validationErrors {
-			fieldName := fieldErr.Field()
-			switch fieldErr.Tag() {
-			case "required":
-				errors[fieldName] = fieldName + " is required"
-			case "email":
-				errors[fieldName] = "Email is not valid"
-			case "min":
-				errors[fieldName] = fieldName + " must be at least " + fieldErr.Param() + " characters"
-			case "eqfield":
-				errors[fieldName] = fieldName + " must be equal to " + fieldErr.Param()
-			case "name":
-				errors[fieldName] = "Name format is invalid"
-			case "nohp":
-				errors[fieldName] = "Phone number format is invalid"
-			default:
-				errors[fieldName] = "Invalid value for " + fieldName
+	inputType := reflect.TypeOf(input)
+	if inputType.Kind() == reflect.Ptr {
+		inputType = inputType.Elem()
+	}
+
+	for _, fe := range validationErrors {
+		jsonField := toSnakeCase(fe.Field()) // default fallback
+
+		if field, ok := inputType.FieldByName(fe.StructField()); ok {
+			tag := field.Tag.Get("json")
+			if tag != "" && tag != "-" {
+				jsonField = strings.Split(tag, ",")[0]
 			}
 		}
-	} else {
-		// fallback for unexpected error types
-		errors["message"] = err.Error()
+
+		errorsMap[jsonField] = defaultErrorMessage(fe)
 	}
 
-	return errors
+	return errorsMap
+}
+
+func defaultErrorMessage(fieldErr validator.FieldError) string {
+	switch fieldErr.Tag() {
+	case "required":
+		return "This field is required"
+	case "email":
+		return "Email is not valid"
+	case "min":
+		return "Must be at least " + fieldErr.Param() + " characters"
+	case "eqfield":
+		return "Must match " + fieldErr.Param()
+	case "name":
+		return "Name format is invalid"
+	case "nohp":
+		return "Phone number format is invalid"
+	default:
+		return "Invalid value"
+	}
+}
+
+func toSnakeCase(s string) string {
+	var result []rune
+	for i, r := range s {
+		if i > 0 && r >= 'A' && r <= 'Z' {
+			result = append(result, '_')
+		}
+		result = append(result, r)
+	}
+	return strings.ToLower(string(result))
 }

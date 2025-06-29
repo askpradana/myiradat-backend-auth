@@ -21,6 +21,7 @@ func main() {
 	authHandler := auth.NewHandler(authService)
 
 	r.POST("/auth/register", authHandler.Register)
+	r.POST("/auth/login", authHandler.Login)
 
 	r.Run()
 }

@@ -25,7 +25,7 @@ func (h *Handler) Register(c *gin.Context) {
 
 	// Step 2: Validate input using validator/v10
 	if err := validation.Validate.Struct(req); err != nil {
-		errs := validation.ParseValidationErrors(err)
+		errs := validation.ParseValidationErrors(err, req)
 		response.Error(c, errs)
 		return
 	}
@@ -46,5 +46,34 @@ func (h *Handler) Register(c *gin.Context) {
 	}
 
 	// Step 6: Success
+	response.Success(c, resp)
+}
+
+func (h *Handler) Login(c *gin.Context) {
+	var req LoginRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, gin.H{"request": "invalid json format"})
+		return
+	}
+
+	if err := validation.Validate.Struct(req); err != nil {
+		errs := validation.ParseValidationErrors(err, req)
+		response.Error(c, errs)
+		return
+	}
+
+	resp, errs, err := h.service.Login(req)
+
+	if len(errs) > 0 {
+		response.Error(c, errs)
+		return
+	}
+
+	if err != nil {
+		response.ServerError(c, "internal server error")
+		return
+	}
+
 	response.Success(c, resp)
 }
