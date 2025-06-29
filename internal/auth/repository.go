@@ -11,6 +11,7 @@ type Repository interface {
 	IsEmailExist(email string) bool
 	FindProfileByEmail(user *Profile, email string) error
 	FindRolesByProfileID(profileID int) ([]ServiceRoleResponse, error)
+	UpdateUserPassword(user *Profile) error
 }
 
 type repository struct {
@@ -67,7 +68,9 @@ func (r *repository) CreateProfileWithRoles(profile *Profile, services []Service
 }
 
 func (r *repository) FindProfileByEmail(user *Profile, email string) error {
-	return r.db.Where("email = ?", email).First(user).Error
+	return r.db.
+		Where("email = ? AND is_deleted = false", email).
+		First(user).Error
 }
 
 func (r *repository) FindRolesByProfileID(profileID int) ([]ServiceRoleResponse, error) {
@@ -76,9 +79,19 @@ func (r *repository) FindRolesByProfileID(profileID int) ([]ServiceRoleResponse,
 	err := r.db.Raw(`
 		SELECT s.service_name, r.role_name
 		FROM profile_service_roles psr
-		JOIN services s ON s.id = psr.service_id
-		JOIN roles r ON r.id = psr.role_id AND r.master_service_id = s.id
+		JOIN services s ON s.id = psr.service_id AND s.is_deleted = false
+		JOIN roles r ON r.id = psr.role_id AND r.master_service_id = s.id AND r.is_deleted = false
 		WHERE psr.profile_id = ?`, profileID).Scan(&result).Error
 
 	return result, err
+}
+
+func (r *repository) UpdateUserPassword(user *Profile) error {
+	return r.db.Model(&Profile{}).
+		Where("email = ?", user.Email).
+		Updates(map[string]interface{}{
+			"password":    user.Password,
+			"modified_at": user.ModifiedAt,
+			"modified_by": user.ModifiedBy,
+		}).Error
 }

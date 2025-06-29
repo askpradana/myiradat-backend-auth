@@ -12,6 +12,7 @@ type Service interface {
 	Register(input RegisterRequest) (RegisterResponse, map[string]string, error)
 	Login(input LoginRequest) (LoginResponse, map[string]string, error)
 	RefreshToken(refreshToken string) (RefreshTokenResponse, map[string]string, error)
+	ChangePassword(req ChangePasswordRequest, token string) (map[string]string, error)
 	ValidateToken(token string) (ValidateTokenResponse, map[string]string, error)
 }
 
@@ -163,6 +164,48 @@ func (s *service) RefreshToken(refreshToken string) (RefreshTokenResponse, map[s
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
 	}, nil, nil
+}
+
+func (s *service) ChangePassword(req ChangePasswordRequest, token string) (map[string]string, error) {
+	// ✅ Parse token
+	claims, err := s.authMiddleware.ParseAccessToken(token)
+	if err != nil {
+		return map[string]string{"token": "invalid or expired access token"}, nil
+	}
+
+	if claims.Email != req.Email {
+		return map[string]string{"email": "email does not match access token"}, nil
+	}
+
+	var user Profile
+	err = s.repo.FindProfileByEmail(&user, req.Email)
+	if err != nil {
+		return map[string]string{"email": "user not found"}, nil
+	}
+	if user.IsDeleted {
+		return map[string]string{"email": "user not active"}, nil
+	}
+
+	// ✅ Check old password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		return map[string]string{"password": "incorrect current password"}, nil
+	}
+
+	// ✅ Hash and update new password
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("password hash failed: %w", err)
+	}
+
+	user.Password = string(newHash)
+	user.ModifiedAt = time.Now()
+	user.ModifiedBy = "self"
+
+	if err := s.repo.UpdateUserPassword(&user); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }
 
 func (s *service) ValidateToken(token string) (ValidateTokenResponse, map[string]string, error) {

@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"myiradat-backend-auth/internal/response"
 	"myiradat-backend-auth/internal/validation"
+	"strings"
 )
 
 type Handler struct {
@@ -130,4 +131,38 @@ func (h *Handler) ValidateToken(c *gin.Context) {
 	}
 
 	response.Success(c, data)
+}
+
+func (h *Handler) ChangePassword(c *gin.Context) {
+	var req ChangePasswordRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, gin.H{"request": "invalid json format"})
+		return
+	}
+
+	if err := validation.Validate.Struct(req); err != nil {
+		response.Error(c, validation.ParseValidationErrors(err, req))
+		return
+	}
+
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		response.Error(c, gin.H{"token": "missing or invalid authorization header"})
+		return
+	}
+	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+
+	// pass to service
+	errs, err := h.service.ChangePassword(req, tokenStr)
+	if len(errs) > 0 {
+		response.Error(c, errs)
+		return
+	}
+	if err != nil {
+		response.ServerError(c, "internal server error")
+		return
+	}
+
+	response.Success(c, gin.H{"message": "password changed successfully"})
 }
