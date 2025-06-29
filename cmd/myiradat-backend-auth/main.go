@@ -29,7 +29,8 @@ func main() {
 		authGroup.POST("/register", authHandler.Register)
 		authGroup.POST("/login", authHandler.Login)
 		authGroup.POST("/refresh-token", authHandler.RefreshToken)
-		authGroup.POST("/validate-token", authHandler.ValidateToken)
+		//untuk keperluan testing jangan di expose ke luar
+		//authGroup.POST("/validate-token", authHandler.ValidateToken)
 	}
 
 	r.Run()
