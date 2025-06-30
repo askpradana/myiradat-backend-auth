@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
 func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Set JSON content type
+		// Enable CORS
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "application/json")
 
 		// Create a simple response
@@ -19,8 +21,11 @@ func main() {
 		json.NewEncoder(w).Encode(resp)
 	})
 
-	// Start the server on port 8080
-	if err := http.ListenAndServe(":7791", nil); err != nil {
-		panic(err)
+	port := ":7791"
+	log.Printf("Auth service is running on port %s\n", port)
+
+	// Start the server
+	if err := http.ListenAndServe(port, nil); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
 	}
 }
