@@ -14,7 +14,7 @@ func main() {
 
 		// Create a simple response
 		resp := map[string]string{
-			"status": "auth service is running",
+			"status": "auth service is running and auto deploy success with docker!",
 		}
 
 		// Encode the response as JSON
