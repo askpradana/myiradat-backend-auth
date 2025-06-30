@@ -39,7 +39,7 @@ jobs:
           ssh-keyscan -p $CUSTOM_PORT -H $HOST >> ~/.ssh/known_hosts
 
           # Copy compiled binary + Docker infra files
-          scp -P $CUSTOM_PORT auth-service docker-compose.yml Dockerfile $USERNAME@$HOST:$REMOTE_DIR || { echo "[!] Failed to copy files"; exit 1; }
+          scp -P $CUSTOM_PORT -r . $USERNAME@$HOST:$REMOTE_DIR
 
           # Connect to VPS and run deploy steps
           ssh -p $CUSTOM_PORT $USERNAME@$HOST <<EOF
