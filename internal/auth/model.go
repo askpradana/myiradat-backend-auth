@@ -27,6 +27,10 @@ type ServiceModel struct {
 	ModifiedBy  string
 }
 
+func (ServiceModel) TableName() string {
+	return "services"
+}
+
 type Role struct {
 	ID              int    `gorm:"primaryKey;autoIncrement"`
 	RoleName        string `gorm:"size:255"`

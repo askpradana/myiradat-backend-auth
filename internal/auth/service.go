@@ -15,6 +15,8 @@ type Service interface {
 	RefreshToken(refreshToken string) (RefreshTokenResponse, map[string]string, error)
 	ChangePassword(req ChangePasswordRequest, email string) (map[string]string, error)
 	ValidateToken(token string) (ValidateTokenResponse, map[string]string, error)
+	GetServiceRoles() ([]ServiceRoleDTO, error)
+	GetMe(email string) (MeResponse, error)
 }
 
 type service struct {
@@ -251,4 +253,55 @@ func (s *service) ValidateToken(token string) (ValidateTokenResponse, map[string
 		Email:    claims.Email,
 		Services: tokenRoles,
 	}, nil, nil
+}
+
+func (s *service) GetServiceRoles() ([]ServiceRoleDTO, error) {
+	services, err := s.repo.FindActiveServiceRoles()
+	if err != nil {
+		return nil, err
+	}
+
+	var result []ServiceRoleDTO
+	for _, svc := range services {
+		roles, err := s.repo.FindRolesByServiceID(svc.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		var roleDTOs []RoleDTO
+		for _, r := range roles {
+			roleDTOs = append(roleDTOs, RoleDTO{
+				RoleID:      r.ID,
+				RoleName:    r.RoleName,
+				Description: r.Description,
+			})
+		}
+
+		result = append(result, ServiceRoleDTO{
+			ServiceID:   svc.ID,
+			ServiceName: svc.ServiceName,
+			RedirectURI: svc.RedirectURI,
+			Roles:       roleDTOs,
+		})
+	}
+	return result, nil
+}
+
+func (s *service) GetMe(email string) (MeResponse, error) {
+	var user Profile
+	if err := s.repo.FindProfileByEmail(&user, email); err != nil {
+		return MeResponse{}, fmt.Errorf("user not found")
+	}
+
+	roles, err := s.repo.FindRolesByProfileID(user.ID)
+	if err != nil {
+		return MeResponse{}, fmt.Errorf("failed to load roles: %w", err)
+	}
+
+	return MeResponse{
+		Name:     user.Name,
+		Email:    user.Email,
+		NoHP:     user.NoHP,
+		Services: roles,
+	}, nil
 }

@@ -31,6 +31,8 @@ func main() {
 		authGroup.POST("/refresh-token", authHandler.RefreshToken)
 		authGroup.POST("/change-password", authHandler.ChangePassword)
 		authGroup.POST("/logout", authHandler.Logout)
+		authGroup.GET("/service-roles", authHandler.GetServiceRoles)
+		authGroup.GET("/me", authHandler.GetMe)
 
 		//untuk keperluan testing jangan di expose ke luar
 		//authGroup.POST("/validate-token", authHandler.ValidateToken)

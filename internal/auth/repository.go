@@ -14,6 +14,8 @@ type Repository interface {
 	UpdateUserPassword(user *Profile) error
 	UpdateRefreshToken(userID uint, refreshToken string) error
 	ClearRefreshTokenByEmail(email string) error
+	FindActiveServiceRoles() ([]ServiceModel, error)
+	FindRolesByServiceID(serviceID int) ([]Role, error)
 }
 
 type repository struct {
@@ -78,12 +80,17 @@ func (r *repository) FindProfileByEmail(user *Profile, email string) error {
 func (r *repository) FindRolesByProfileID(profileID uint) ([]ServiceRoleResponse, error) {
 	var result []ServiceRoleResponse
 
-	err := r.db.Raw(`
-		SELECT s.service_name, r.role_name
-		FROM profile_service_roles psr
-		JOIN services s ON s.id = psr.service_id AND s.is_deleted = false
-		JOIN roles r ON r.id = psr.role_id AND r.master_service_id = s.id AND r.is_deleted = false
-		WHERE psr.profile_id = ?`, profileID).Scan(&result).Error
+	err := r.db.
+		Table("profile_service_roles AS psr").
+		Select(`
+			s.service_name AS service_name,
+			r.role_name AS role_name,
+			r.description AS role_description
+		`).
+		Joins("JOIN services s ON s.id = psr.service_id AND s.is_deleted = FALSE").
+		Joins("JOIN roles r ON r.id = psr.role_id AND r.is_deleted = FALSE").
+		Where("psr.profile_id = ?", profileID).
+		Scan(&result).Error
 
 	return result, err
 }
@@ -108,4 +115,20 @@ func (r *repository) ClearRefreshTokenByEmail(email string) error {
 	return r.db.Model(&Profile{}).
 		Where("email = ?", email).
 		Update("refresh_token", "").Error
+}
+
+func (r *repository) FindActiveServiceRoles() ([]ServiceModel, error) {
+	var services []ServiceModel
+	err := r.db.
+		Where("is_deleted = false").
+		Find(&services).Error
+	return services, err
+}
+
+func (r *repository) FindRolesByServiceID(serviceID int) ([]Role, error) {
+	var roles []Role
+	err := r.db.
+		Where("master_service_id = ? AND is_deleted = false", serviceID).
+		Find(&roles).Error
+	return roles, err
 }

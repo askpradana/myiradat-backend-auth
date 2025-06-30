@@ -30,8 +30,9 @@ type LoginResponse struct {
 }
 
 type ServiceRoleResponse struct {
-	ServiceName string `json:"serviceName"`
-	RoleName    string `json:"roleName"`
+	ServiceName     string `json:"serviceName"`
+	RoleName        string `json:"roleName"`
+	RoleDescription string `json:"roleDescription"`
 }
 
 type RefreshTokenRequest struct {
@@ -57,4 +58,25 @@ type ChangePasswordRequest struct {
 	Password        string `json:"password" validate:"required"`
 	NewPassword     string `json:"newPassword" validate:"required,min=8"`
 	ConfirmPassword string `json:"confirmPassword" validate:"required,eqfield=NewPassword"`
+}
+
+type ServiceRoleDTO struct {
+	ServiceID   int       `json:"serviceId"`
+	ServiceName string    `json:"serviceName"`
+	Description string    `json:"description"`
+	RedirectURI string    `json:"redirectURI"`
+	Roles       []RoleDTO `json:"roles"`
+}
+
+type RoleDTO struct {
+	RoleID      int    `json:"roleId"`
+	RoleName    string `json:"roleName"`
+	Description string `json:"description"`
+}
+
+type MeResponse struct {
+	Name     string                `json:"name"`
+	Email    string                `json:"email"`
+	NoHP     string                `json:"noHP"`
+	Services []ServiceRoleResponse `json:"services"`
 }

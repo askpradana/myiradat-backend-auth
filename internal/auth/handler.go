@@ -206,3 +206,38 @@ func (h *Handler) ValidateToken(c *gin.Context) {
 
 	response.Success(c, data)
 }
+
+func (h *Handler) GetServiceRoles(c *gin.Context) {
+	result, err := h.service.GetServiceRoles()
+	if err != nil {
+		response.ServerError(c, "failed to fetch service-role data")
+		return
+	}
+	response.Success(c, result)
+}
+
+func (h *Handler) GetMe(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		response.Error(c, gin.H{"token": "missing or invalid authorization header"})
+		return
+	}
+
+	accessToken := strings.TrimPrefix(authHeader, "Bearer ")
+
+	// Parse token using your JWT middleware
+	claims, err := h.authMiddleware.ParseAccessToken(accessToken)
+	if err != nil {
+		response.Error(c, gin.H{"token": "invalid or expired access token"})
+		return
+	}
+
+	// Fetch profile from service using email from claims
+	data, err := h.service.GetMe(claims.Email)
+	if err != nil {
+		response.ServerError(c, "failed to retrieve profile")
+		return
+	}
+
+	response.Success(c, data)
+}
