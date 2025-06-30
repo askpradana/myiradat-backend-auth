@@ -1,0 +1,49 @@
+name: Deploy Go Auth Service to VPS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Check out the repository
+      - uses: actions/checkout@v4
+
+      # Step 2: Set up Go environment
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      # Step 3: Build the Go binary
+      - name: Build Go Auth Service
+        run: |
+          go mod tidy
+          go build -o auth-service .
+
+      # Step 4: Deploy to VPS via SCP + SSH
+      - name: Deploy to VPS
+        env:
+          HOST: ${{ secrets.HOST }}
+          USERNAME: ${{ secrets.USERNAME }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          REMOTE_DIR: ${{ secrets.REMOTE_DIR }}
+          CUSTOM_PORT: ${{ secrets.CUSTOM_PORT }}
+        run: |
+          set -x
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p $CUSTOM_PORT -H $HOST >> ~/.ssh/known_hosts
+
+          # Copy binary + Dockerfile + Compose
+          scp -P $CUSTOM_PORT auth-service docker-compose.yml Dockerfile $USERNAME@$HOST:$REMOTE_DIR || { echo "Failed to copy files"; exit 1; }
+
+          # SSH into VPS and restart Docker
+          ssh -p $CUSTOM_PORT $USERNAME@$HOST << 'EOF'
+            cd $REMOTE_DIR
+            docker compose down
+            docker compose up --build -d
+          EOF
