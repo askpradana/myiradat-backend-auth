@@ -30,8 +30,8 @@ func NewJWTGenerator(cfg *config.JWTConfig) IJwtTokenGenerator {
 func (j *jwtGenerator) GenerateAccessToken(email string, roles []TokenServiceRole) (string, error) {
 	claims := jwt.MapClaims{
 		"email":    email,
-		"services": roles, // ✅ this is okay, but only if TokenServiceRole is JSON-safe
-		"exp":      time.Now().Add(1 * time.Hour).Unix(),
+		"services": roles,
+		"exp":      time.Now().Add(j.config.AccessTokenExp).Unix(),
 		"iat":      time.Now().Unix(),
 		"iss":      "myiradat-auth",
 	}
