@@ -38,12 +38,25 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -p $CUSTOM_PORT -H $HOST >> ~/.ssh/known_hosts
 
-          # Copy binary + Dockerfile + Compose
-          scp -P $CUSTOM_PORT auth-service docker-compose.yml Dockerfile $USERNAME@$HOST:$REMOTE_DIR || { echo "Failed to copy files"; exit 1; }
+          # Copy compiled binary + Docker infra files
+          scp -P $CUSTOM_PORT auth-service docker-compose.yml Dockerfile $USERNAME@$HOST:$REMOTE_DIR || { echo "[!] Failed to copy files"; exit 1; }
 
-          # SSH into VPS and restart Docker
-          ssh -p $CUSTOM_PORT $USERNAME@$HOST << 'EOF'
-            cd $REMOTE_DIR
-            docker compose down
-            docker compose up --build -d
+          # Connect to VPS and run deploy steps
+          ssh -p $CUSTOM_PORT $USERNAME@$HOST <<EOF
+            set -e
+            cd $REMOTE_DIR || { echo "[!] Failed to cd into \$REMOTE_DIR"; exit 1; }
+
+            echo ">> Listing directory contents:"
+            ls -lah
+
+            echo ">> Docker Compose version:"
+            docker compose version || docker-compose version
+
+            echo ">> Bringing service down..."
+            docker compose -f docker-compose.yml down || echo "[!] compose down failed (not fatal)"
+
+            echo ">> Bringing service up..."
+            docker compose -f docker-compose.yml up --build -d || { echo "[!] compose up failed"; exit 1; }
+
+            echo "✅ Deploy complete."
           EOF
