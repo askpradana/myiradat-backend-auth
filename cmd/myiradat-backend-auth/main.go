@@ -49,5 +49,5 @@ func main() {
 		port = "8080"
 	}
 
-	r.Run()
+	r.Run(":" + port)
 }
