@@ -2,6 +2,9 @@ services:
   auth:
     build:
       context: .
+      dockerfile: Dockerfile
     container_name: auth-service
     ports:
       - "7791:7791"
+    env_file:
+      - .env

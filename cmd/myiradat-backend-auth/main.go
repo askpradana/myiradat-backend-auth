@@ -1,12 +1,14 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
 	"myiradat-backend-auth/internal/auth"
 	"myiradat-backend-auth/internal/config"
 	"myiradat-backend-auth/internal/database"
 	authMiddleware "myiradat-backend-auth/internal/middleware/auth"
 	"myiradat-backend-auth/internal/validation"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -24,6 +26,10 @@ func main() {
 	authService := auth.NewService(authRepo, jwtGenerator)
 	authHandler := auth.NewHandler(authService, jwtGenerator)
 
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "Auth Service is running in docker!"})
+	})
+
 	authGroup := r.Group("/auth")
 	{
 		authGroup.POST("/register", authHandler.Register)
@@ -36,6 +42,11 @@ func main() {
 
 		//untuk keperluan testing jangan di expose ke luar
 		//authGroup.POST("/validate-token", authHandler.ValidateToken)
+	}
+
+	port := jwtConfig.ApplicationPort
+	if port == "" {
+		port = "8080"
 	}
 
 	r.Run()

@@ -15,13 +15,13 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.23'
 
       # Step 3: Build the Go binary
       - name: Build Go Auth Service
         run: |
           go mod tidy
-          go build -o auth-service .
+          go build -o auth-service ./cmd/myiradat-backend-auth/main.go
 
       # Step 4: Deploy to VPS via SCP + SSH
       - name: Deploy to VPS
@@ -44,7 +44,7 @@ jobs:
           # Connect to VPS and run deploy steps
           ssh -p $CUSTOM_PORT $USERNAME@$HOST <<EOF
             set -e
-            cd $REMOTE_DIR || { echo "[!] Failed to cd into \$REMOTE_DIR"; exit 1; }
+            cd $REMOTE_DIR || { echo "[!] Failed to cd into $REMOTE_DIR"; exit 1; }
 
             echo ">> Listing directory contents:"
             ls -lah
