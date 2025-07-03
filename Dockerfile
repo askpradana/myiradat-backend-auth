@@ -13,6 +13,7 @@ RUN go mod download
 # Copy the source code
 COPY internal/ ./internal/
 COPY cmd/myiradat-backend-auth/ ./cmd/myiradat-backend-auth/
+COPY .env .env
 
 # Build the binary from the correct main.go
 RUN go build -o auth-service ./cmd/myiradat-backend-auth/main.go
