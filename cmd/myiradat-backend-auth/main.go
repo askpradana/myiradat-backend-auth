@@ -7,7 +7,9 @@ import (
 	authMiddleware "myiradat-backend-auth/internal/middleware/auth"
 	"myiradat-backend-auth/internal/validation"
 	"net/http"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,6 +23,15 @@ func main() {
 	jwtGenerator := authMiddleware.NewJWTGenerator(jwtConfig)
 
 	r := gin.Default()
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"}, // ! Only used in DEV
+		AllowMethods:     []string{"GET", "POST", "PUT", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	authRepo := auth.NewRepository(database.DB)
 	authService := auth.NewService(authRepo, jwtGenerator)
