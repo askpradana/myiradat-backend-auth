@@ -1,5 +1,5 @@
 # ----------- Build Stage -----------
-FROM golang:1.22-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
@@ -7,14 +7,16 @@ WORKDIR /app
 RUN apk add --no-cache git tzdata
 
 # Copy go mod files and download dependencies
-# COPY go.mod go.sum ./
-# RUN go mod download
+COPY go.mod go.sum ./
+RUN go mod download
 
-# Copy the rest of the code
-COPY . .
+# Copy the source code
+COPY internal/ ./internal/
+COPY cmd/myiradat-backend-auth/ ./cmd/myiradat-backend-auth/
+COPY .env .env
 
-# Build the binary
-RUN go build -o auth-service .
+# Build the binary from the correct main.go
+RUN go build -o auth-service ./cmd/myiradat-backend-auth/main.go
 
 # ----------- Final Stage -----------
 FROM alpine:latest
