@@ -241,9 +241,9 @@ func (s *service) ValidateToken(token string) (ValidateTokenResponse, map[string
 		return ValidateTokenResponse{}, map[string]string{"token": "invalid or expired"}, nil
 	}
 
-	var tokenRoles []ServiceRoleResponse
+	var tokenRoles []ServiceRoleForToken
 	for _, r := range claims.Services {
-		tokenRoles = append(tokenRoles, ServiceRoleResponse{
+		tokenRoles = append(tokenRoles, ServiceRoleForToken{
 			ServiceName: r.ServiceName,
 			RoleName:    r.RoleName,
 		})
