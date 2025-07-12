@@ -13,7 +13,6 @@ type JWTConfig struct {
 	Issuer          string
 	AccessTokenExp  time.Duration
 	RefreshTokenExp time.Duration
-	ApplicationPort string
 }
 
 func LoadEnv() {
@@ -30,7 +29,6 @@ func InitJWTConfig() *JWTConfig {
 		Issuer:          getEnv("JWT_ISSUER", "myiradat-auth"),
 		AccessTokenExp:  getEnvAsDuration("JWT_ACCESS_EXP", 1*time.Hour),
 		RefreshTokenExp: getEnvAsDuration("JWT_REFRESH_EXP", 168*time.Hour),
-		ApplicationPort: getEnv("PORT", "8080"),
 	}
 }
 
