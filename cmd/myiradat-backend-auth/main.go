@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
 	"myiradat-backend-auth/internal/auth"
 	"myiradat-backend-auth/internal/config"
 	"myiradat-backend-auth/internal/database"
 	authMiddleware "myiradat-backend-auth/internal/middleware/auth"
+	"myiradat-backend-auth/internal/routes"
 	"myiradat-backend-auth/internal/validation"
 )
 
@@ -15,28 +15,21 @@ func main() {
 	validation.InitValidator()
 
 	jwtConfig := config.InitJWTConfig()
-
 	jwtGenerator := authMiddleware.NewJWTGenerator(jwtConfig)
 
-	r := gin.Default()
-
+	// Initialize dependencies
 	authRepo := auth.NewRepository(database.DB)
 	authService := auth.NewService(authRepo, jwtGenerator)
 	authHandler := auth.NewHandler(authService, jwtGenerator)
 
-	authGroup := r.Group("/auth")
-	{
-		authGroup.POST("/register", authHandler.Register)
-		authGroup.POST("/login", authHandler.Login)
-		authGroup.POST("/refresh-token", authHandler.RefreshToken)
-		authGroup.POST("/change-password", authHandler.ChangePassword)
-		authGroup.POST("/logout", authHandler.Logout)
-		authGroup.GET("/service-roles", authHandler.GetServiceRoles)
-		authGroup.GET("/me", authHandler.GetMe)
+	// Setup routes
+	r := routes.SetupRoutes(authHandler)
 
-		//untuk keperluan testing jangan di expose ke luar
-		//authGroup.POST("/validate-token", authHandler.ValidateToken)
+	// Start server
+	port := jwtConfig.ApplicationPort
+	if port == "" {
+		port = "8080"
 	}
 
-	r.Run()
+	r.Run("0.0.0.0:" + port)
 }
