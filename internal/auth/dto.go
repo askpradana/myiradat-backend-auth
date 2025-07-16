@@ -71,6 +71,7 @@ type RoleDTO struct {
 type ServiceRoleForToken struct {
 	ServiceName     string `json:"serviceName"`
 	RoleName        string `json:"roleName"`
+	ServiceRole     string `json:"serviceRole"`
 	RoleDescription string `json:"roleDescription"`
 }
 
@@ -79,6 +80,7 @@ type ServiceRoleResponse struct {
 	RoleName        string `json:"roleName"`
 	RoleDescription string `json:"roleDescription"`
 	RedirectUri     string `json:"redirect_uri"`
+	ServiceCode     string `json:"serviceCode"`
 	ServiceId       int    `json:"service_id"`
 	RoleId          int    `json:"role_id"`
 }

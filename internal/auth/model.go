@@ -20,6 +20,7 @@ type ServiceModel struct {
 	ID          int    `gorm:"primaryKey;autoIncrement"`
 	ServiceName string `gorm:"type:text"`
 	RedirectURI string `gorm:"type:text"`
+	ServiceCode string `gorm:"type:text"`
 	IsDeleted   bool
 	CreatedAt   time.Time
 	CreatedBy   string

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"myiradat-backend-auth/internal/auth"
 	"myiradat-backend-auth/internal/config"
 	"myiradat-backend-auth/internal/database"
 	authMiddleware "myiradat-backend-auth/internal/middleware/auth"
-	"myiradat-backend-auth/internal/routes"
 	"myiradat-backend-auth/internal/validation"
+	"time"
 )
 
 func main() {
@@ -15,21 +17,37 @@ func main() {
 	validation.InitValidator()
 
 	jwtConfig := config.InitJWTConfig()
+
 	jwtGenerator := authMiddleware.NewJWTGenerator(jwtConfig)
 
-	// Initialize dependencies
+	r := gin.Default()
+
 	authRepo := auth.NewRepository(database.DB)
 	authService := auth.NewService(authRepo, jwtGenerator)
 	authHandler := auth.NewHandler(authService, jwtGenerator)
 
-	// Setup routes
-	r := routes.SetupRoutes(authHandler)
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
-	// Start server
-	port := jwtConfig.ApplicationPort
-	if port == "" {
-		port = "8080"
+	authGroup := r.Group("/auth")
+	{
+		authGroup.POST("/register", authHandler.Register)
+		authGroup.POST("/login", authHandler.Login)
+		authGroup.POST("/refresh-token", authHandler.RefreshToken)
+		authGroup.POST("/change-password", authHandler.ChangePassword)
+		authGroup.POST("/logout", authHandler.Logout)
+		authGroup.GET("/service-roles", authHandler.GetServiceRoles)
+		authGroup.GET("/me", authHandler.GetMe)
+
+		//untuk keperluan testing jangan di expose ke luar
+		//authGroup.POST("/validate-token", authHandler.ValidateToken)
 	}
 
-	r.Run("0.0.0.0:" + port)
+	r.Run()
 }
