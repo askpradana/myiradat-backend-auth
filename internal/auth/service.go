@@ -103,6 +103,7 @@ func (s *service) Login(input LoginRequest) (LoginResponse, map[string]string, e
 		tokenRoles[i] = authmiddleware.TokenServiceRole{
 			ServiceName: r.ServiceName,
 			RoleName:    r.RoleName,
+			ServiceCode: r.ServiceCode,
 		}
 	}
 

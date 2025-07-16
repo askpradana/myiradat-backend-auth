@@ -1,12 +1,14 @@
 package main
 
 import (
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"myiradat-backend-auth/internal/auth"
 	"myiradat-backend-auth/internal/config"
 	"myiradat-backend-auth/internal/database"
 	authMiddleware "myiradat-backend-auth/internal/middleware/auth"
 	"myiradat-backend-auth/internal/validation"
+	"time"
 )
 
 func main() {
@@ -23,6 +25,15 @@ func main() {
 	authRepo := auth.NewRepository(database.DB)
 	authService := auth.NewService(authRepo, jwtGenerator)
 	authHandler := auth.NewHandler(authService, jwtGenerator)
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	authGroup := r.Group("/auth")
 	{

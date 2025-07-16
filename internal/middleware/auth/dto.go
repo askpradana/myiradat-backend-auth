@@ -7,6 +7,7 @@ type RefreshTokenClaims struct {
 type TokenServiceRole struct {
 	ServiceName string `json:"serviceName"`
 	RoleName    string `json:"roleName"`
+	ServiceCode string `json:"serviceCode"`
 }
 
 type AccessTokenClaims struct {

@@ -85,6 +85,7 @@ func (r *repository) FindRolesByProfileID(profileID uint) ([]ServiceRoleResponse
 		Select(`
 			s.service_name AS service_name,
 			s.redirect_uri AS redirect_uri,
+			s.service_code AS service_code,
 			s.id AS service_id,
 			r.id AS role_id,
 			r.role_name AS role_name,
