@@ -2,244 +2,213 @@ package auth
 
 import (
 	"fmt"
-	authmiddleware "myiradat-backend-auth/internal/middleware/auth"
+	"myiradat-backend-auth/internal/middleware"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
 type Service interface {
-	Register(input RegisterRequest) (RegisterResponse, map[string]string, error)
-	Login(input LoginRequest) (LoginResponse, map[string]string, error)
-	Logout(email string) (map[string]string, error)
-	RefreshToken(refreshToken string) (RefreshTokenResponse, map[string]string, error)
-	ChangePassword(req ChangePasswordRequest, email string) (map[string]string, error)
-	ValidateToken(token string) (ValidateTokenResponse, map[string]string, error)
+	Register(input RegisterRequest) (RegisterResponse, error)
+	Login(input LoginRequest) (LoginResponse, error)
+	Logout(email string) error
+	RefreshToken(refreshToken string) (RefreshTokenResponse, error)
+	ChangePassword(req ChangePasswordRequest, email string) error
+	ValidateToken(token string) (ValidateTokenResponse, error)
 	GetServiceRoles() ([]ServiceRoleDTO, error)
 	GetMe(email string) (MeResponse, error)
 }
 
 type service struct {
 	repo           Repository
-	authMiddleware authmiddleware.IJwtTokenGenerator
+	authMiddleware middleware.IJwtTokenGenerator
 }
 
-func NewService(r Repository, jwt authmiddleware.IJwtTokenGenerator) Service {
+func NewService(r Repository, jwt middleware.IJwtTokenGenerator) Service {
 	return &service{
 		repo:           r,
 		authMiddleware: jwt,
 	}
 }
 
-func (s *service) Register(input RegisterRequest) (RegisterResponse, map[string]string, error) {
-	// Initialize an empty field error map
-	fieldErrors := make(map[string]string)
-
-	// Step 1: Check if email already exists
+func (s *service) Register(input RegisterRequest) (RegisterResponse, error) {
 	if s.repo.IsEmailExist(input.Email) {
-		fieldErrors["email"] = "email already exists"
-		return RegisterResponse{}, fieldErrors, nil
+		return RegisterResponse{}, fmt.Errorf("email %s already exists", input.Email)
 	}
 
-	// Step 2: Hash the password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return RegisterResponse{}, nil, fmt.Errorf("failed to hash password: %w", err)
+		return RegisterResponse{}, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	// Step 3: Build profile model
 	profile := Profile{
 		Name:       input.Name,
 		Email:      input.Email,
 		NoHP:       input.NoHP,
 		Password:   string(hashedPassword),
 		CreatedAt:  time.Now(),
-		CreatedBy:  "system", // optionally extract user if logged-in
+		CreatedBy:  "system",
 		ModifiedAt: time.Now(),
 		ModifiedBy: "system",
 	}
 
-	// Step 4: Save profile + service-role relation
-	err = s.repo.CreateProfileWithRoles(&profile, input.Services)
-	if err != nil {
+	if err := s.repo.CreateProfileWithRoles(&profile, input.Services); err != nil {
 		if err.Error() == "invalid service and roles" {
-			fieldErrors["services"] = "invalid service and role mapping"
-			return RegisterResponse{}, fieldErrors, nil
+			return RegisterResponse{}, fmt.Errorf("invalid service and roles")
 		}
-		return RegisterResponse{}, nil, fmt.Errorf("failed to create profile: %w", err)
+		return RegisterResponse{}, fmt.Errorf("failed to create profile with roles: %w", err)
 	}
 
-	// Step 5: Return success response
 	return RegisterResponse{
 		ID:    profile.ID,
 		Email: profile.Email,
-	}, nil, nil
+	}, nil
 }
 
-func (s *service) Login(input LoginRequest) (LoginResponse, map[string]string, error) {
-	errs := make(map[string]string)
-
-	// 1. Find user
+func (s *service) Login(input LoginRequest) (LoginResponse, error) {
 	var user Profile
 	if err := s.repo.FindProfileByEmail(&user, input.Email); err != nil {
-		errs["email"] = "email not found"
-		return LoginResponse{}, errs, nil
+		return LoginResponse{}, fmt.Errorf("email not found: %s", input.Email)
 	}
 
-	// 2. Compare passwords
-	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)) != nil {
-		errs["password"] = "invalid password"
-		return LoginResponse{}, errs, nil
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
+		return LoginResponse{}, fmt.Errorf("incorrect password")
 	}
 
-	// 3. Get roles & services
 	roles, err := s.repo.FindRolesByProfileID(user.ID)
 	if err != nil {
-		return LoginResponse{}, nil, err
+		return LoginResponse{}, fmt.Errorf("failed to retrieve user roles: %w", err)
 	}
 
-	tokenRoles := make([]authmiddleware.TokenServiceRole, len(roles))
+	tokenRoles := make([]middleware.TokenServiceRole, len(roles))
 	for i, r := range roles {
-		tokenRoles[i] = authmiddleware.TokenServiceRole{
-			ServiceName: r.ServiceName,
-			RoleName:    r.RoleName,
+		tokenRoles[i] = middleware.TokenServiceRole{
 			ServiceCode: r.ServiceCode,
+			RoleName:    r.RoleName,
 		}
 	}
 
-	// 4. Build access token
-	token, err := s.authMiddleware.GenerateAccessToken(user.Email, tokenRoles)
+	accessToken, err := s.authMiddleware.GenerateAccessToken(user.Email, tokenRoles)
 	if err != nil {
-		return LoginResponse{}, nil, err
+		return LoginResponse{}, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	refresh, err := s.authMiddleware.GenerateRefreshToken(user.Email)
+	refreshToken, err := s.authMiddleware.GenerateRefreshToken(user.Email)
 	if err != nil {
-		return LoginResponse{}, nil, err
+		return LoginResponse{}, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	// Save refresh token
-	if err := s.repo.UpdateRefreshToken(user.ID, refresh); err != nil {
-		return LoginResponse{}, nil, err
+	if err := s.repo.UpdateRefreshToken(user.ID, refreshToken); err != nil {
+		return LoginResponse{}, fmt.Errorf("failed to update refresh token: %w", err)
 	}
 
 	return LoginResponse{
-		AccessToken:  token,
-		RefreshToken: refresh,
-	}, nil, nil
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
 }
 
-func (s *service) Logout(email string) (map[string]string, error) {
-	// Find user to ensure they exist and are not deleted
+func (s *service) Logout(email string) error {
 	var user Profile
 	if err := s.repo.FindProfileByEmail(&user, email); err != nil {
-		return map[string]string{"user": "user not found"}, nil
+		return fmt.Errorf("user with email %s not found: %w", email, err)
 	}
 	if user.IsDeleted {
-		return map[string]string{"user": "account is inactive"}, nil
+		return fmt.Errorf("user with email %s is deleted", email)
 	}
 
-	// Clear refresh token in DB
 	if err := s.repo.ClearRefreshTokenByEmail(email); err != nil {
-		return nil, err
+		return fmt.Errorf("failed to clear refresh token: %w", err)
 	}
 
-	return nil, nil
+	return nil
 }
 
-func (s *service) RefreshToken(refreshToken string) (RefreshTokenResponse, map[string]string, error) {
-	// 1. Validate refresh token
+func (s *service) RefreshToken(refreshToken string) (RefreshTokenResponse, error) {
 	claims, err := s.authMiddleware.ParseRefreshToken(refreshToken)
 	if err != nil {
-		return RefreshTokenResponse{}, map[string]string{"refresh_token": "Invalid or expired refresh token"}, nil
+		return RefreshTokenResponse{}, fmt.Errorf("invalid refresh token: %w", err)
 	}
 
-	// 2. Get user
 	var user Profile
-	err = s.repo.FindProfileByEmail(&user, claims.Email)
-	if err != nil {
-		return RefreshTokenResponse{}, nil, fmt.Errorf("user not found: %w", err)
+	if err := s.repo.FindProfileByEmail(&user, claims.Email); err != nil {
+		return RefreshTokenResponse{}, fmt.Errorf("user not found: %w", err)
 	}
 
 	if user.RefreshToken != refreshToken {
-		return RefreshTokenResponse{}, map[string]string{"token": "refresh token does not match"}, nil
+		return RefreshTokenResponse{}, fmt.Errorf("refresh token mismatch")
 	}
 
-	// 3. Get roles for the user (optional, for access token payload)
 	roles, err := s.repo.FindRolesByProfileID(user.ID)
 	if err != nil {
-		return RefreshTokenResponse{}, nil, fmt.Errorf("failed to load roles: %w", err)
+		return RefreshTokenResponse{}, fmt.Errorf("failed to retrieve roles: %w", err)
 	}
 
-	var tokenRoles []authmiddleware.TokenServiceRole
+	var tokenRoles []middleware.TokenServiceRole
 	for _, r := range roles {
-		tokenRoles = append(tokenRoles, authmiddleware.TokenServiceRole{
+		tokenRoles = append(tokenRoles, middleware.TokenServiceRole{
 			ServiceName: r.ServiceName,
 			RoleName:    r.RoleName,
 		})
 	}
 
-	// Generate new access & refresh tokens
 	newAccessToken, err := s.authMiddleware.GenerateAccessToken(user.Email, tokenRoles)
 	if err != nil {
-		return RefreshTokenResponse{}, nil, err
+		return RefreshTokenResponse{}, fmt.Errorf("failed to generate new access token: %w", err)
 	}
 
 	newRefreshToken, err := s.authMiddleware.GenerateRefreshToken(user.Email)
 	if err != nil {
-		return RefreshTokenResponse{}, nil, err
+		return RefreshTokenResponse{}, fmt.Errorf("failed to generate new refresh token: %w", err)
 	}
 
 	if err := s.repo.UpdateRefreshToken(user.ID, newRefreshToken); err != nil {
-		return RefreshTokenResponse{}, nil, err
+		return RefreshTokenResponse{}, fmt.Errorf("failed to update refresh token: %w", err)
 	}
 
 	return RefreshTokenResponse{
 		AccessToken:  newAccessToken,
 		RefreshToken: newRefreshToken,
-	}, nil, nil
+	}, nil
 }
 
-func (s *service) ChangePassword(req ChangePasswordRequest, email string) (map[string]string, error) {
+func (s *service) ChangePassword(req ChangePasswordRequest, email string) error {
 	if req.Email != email {
-		return map[string]string{"email": "email does not match access token"}, nil
+		return fmt.Errorf("email mismatch: %s != %s", req.Email, email)
 	}
 
 	var user Profile
 	if err := s.repo.FindProfileByEmail(&user, email); err != nil {
-		return map[string]string{"email": "user not found"}, nil
+		return fmt.Errorf("user not found: %w", err)
 	}
 	if user.IsDeleted {
-		return map[string]string{"email": "account is inactive"}, nil
+		return fmt.Errorf("cannot change password: user is deleted")
 	}
 
-	// Verify old password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		return map[string]string{"password": "incorrect current password"}, nil
+		return fmt.Errorf("old password is incorrect")
 	}
 
-	// Hash new password
 	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash new password: %w", err)
+		return fmt.Errorf("failed to hash new password: %w", err)
 	}
 
-	// Update
 	user.Password = string(newHash)
 	user.ModifiedAt = time.Now()
 	user.ModifiedBy = "self"
 
 	if err := s.repo.UpdateUserPassword(&user); err != nil {
-		return nil, err
+		return fmt.Errorf("failed to update password: %w", err)
 	}
 
-	return nil, nil
+	return nil
 }
 
-func (s *service) ValidateToken(token string) (ValidateTokenResponse, map[string]string, error) {
+func (s *service) ValidateToken(token string) (ValidateTokenResponse, error) {
 	claims, err := s.authMiddleware.ParseAccessToken(token)
 	if err != nil {
-		return ValidateTokenResponse{}, map[string]string{"token": "invalid or expired"}, nil
+		return ValidateTokenResponse{}, fmt.Errorf("invalid access token: %w", err)
 	}
 
 	var tokenRoles []ServiceRoleForToken
@@ -253,20 +222,20 @@ func (s *service) ValidateToken(token string) (ValidateTokenResponse, map[string
 	return ValidateTokenResponse{
 		Email:    claims.Email,
 		Services: tokenRoles,
-	}, nil, nil
+	}, nil
 }
 
 func (s *service) GetServiceRoles() ([]ServiceRoleDTO, error) {
 	services, err := s.repo.FindActiveServiceRoles()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch service roles: %w", err)
 	}
 
 	var result []ServiceRoleDTO
 	for _, svc := range services {
 		roles, err := s.repo.FindRolesByServiceID(svc.ID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to fetch roles for service ID %d: %w", svc.ID, err)
 		}
 
 		var roleDTOs []RoleDTO
@@ -291,12 +260,12 @@ func (s *service) GetServiceRoles() ([]ServiceRoleDTO, error) {
 func (s *service) GetMe(email string) (MeResponse, error) {
 	var user Profile
 	if err := s.repo.FindProfileByEmail(&user, email); err != nil {
-		return MeResponse{}, fmt.Errorf("user not found")
+		return MeResponse{}, fmt.Errorf("user not found: %w", err)
 	}
 
 	roles, err := s.repo.FindRolesByProfileID(user.ID)
 	if err != nil {
-		return MeResponse{}, fmt.Errorf("failed to load roles: %w", err)
+		return MeResponse{}, fmt.Errorf("failed to retrieve roles: %w", err)
 	}
 
 	return MeResponse{

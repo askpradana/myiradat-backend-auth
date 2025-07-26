@@ -1,206 +1,150 @@
 package auth
 
 import (
-	"github.com/gin-gonic/gin"
-	authmiddleware "myiradat-backend-auth/internal/middleware/auth"
+	"myiradat-backend-auth/internal/configs"
+	"myiradat-backend-auth/internal/middleware"
 	"myiradat-backend-auth/internal/response"
-	"myiradat-backend-auth/internal/validation"
-	"strings"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
 
 type Handler struct {
-	service        Service
-	authMiddleware authmiddleware.IJwtTokenGenerator
+	service   Service
+	validator *validator.Validate
 }
 
-func NewHandler(s Service, auth authmiddleware.IJwtTokenGenerator) *Handler {
+func NewHandler(s Service) *Handler {
 	return &Handler{
-		service:        s,
-		authMiddleware: auth,
+		service:   s,
+		validator: validator.New(),
+	}
+}
+
+func HttpHandler(r *gin.Engine) {
+	jwtConfig := configs.InitJWTConfig()
+	jwtGenerator := middleware.NewJWTGenerator(jwtConfig)
+
+	authRepo := NewRepository(configs.Database.DbUser())
+	authService := NewService(authRepo, jwtGenerator)
+	authHandler := NewHandler(authService)
+
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "Auth Service is running in docker!"})
+	})
+
+	authGroup := r.Group("/auth")
+	{
+		authGroup.POST("/register", authHandler.Register)
+		authGroup.POST("/login", authHandler.Login)
+		authGroup.POST("/refresh-token", authHandler.RefreshToken)
+		authGroup.POST("/change-password", middleware.AuthMiddleware("user"), authHandler.ChangePassword)
+		authGroup.POST("/logout", middleware.AuthMiddleware("user"), authHandler.Logout)
+		authGroup.GET("/service-roles", authHandler.GetServiceRoles)
+		authGroup.GET("/me", middleware.AuthMiddleware("user"), authHandler.GetMe)
 	}
 }
 
 func (h *Handler) Register(c *gin.Context) {
 	var req RegisterRequest
-
-	// Step 1: Bind JSON
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, gin.H{"request": "invalid json format"})
+		response.Error(c, err.Error())
 		return
 	}
 
-	// Step 2: Validate input using validator/v10
-	if err := validation.Validate.Struct(req); err != nil {
-		errs := validation.ParseValidationErrors(err, req)
-		response.Error(c, errs)
+	if err := h.validator.Struct(req); err != nil {
+		response.Error(c, err.Error())
 		return
 	}
 
-	// Step 3: Call service layer
-	resp, errs, err := h.service.Register(req)
-
-	// Step 4: Handle business logic-level validation errors
-	if len(errs) > 0 {
-		response.Error(c, errs)
-		return
-	}
-
-	// Step 5: Handle internal error
+	data, err := h.service.Register(req)
 	if err != nil {
-		response.ServerError(c, "internal server error")
+		response.ServerError(c, err.Error())
 		return
 	}
 
-	// Step 6: Success
-	response.Success(c, resp)
+	response.Success(c, data)
 }
 
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, gin.H{"request": "invalid json format"})
+		response.Error(c, err.Error())
 		return
 	}
 
-	if err := validation.Validate.Struct(req); err != nil {
-		errs := validation.ParseValidationErrors(err, req)
-		response.Error(c, errs)
+	if err := h.validator.Struct(req); err != nil {
+		response.Error(c, err.Error())
 		return
 	}
 
-	resp, errs, err := h.service.Login(req)
-
-	if len(errs) > 0 {
-		response.Error(c, errs)
-		return
-	}
-
+	data, err := h.service.Login(req)
 	if err != nil {
-		response.ServerError(c, "internal server error")
+		response.ServerError(c, err.Error())
 		return
 	}
 
-	response.Success(c, resp)
+	response.Success(c, data)
 }
 
 func (h *Handler) RefreshToken(c *gin.Context) {
-	var req RefreshTokenRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, gin.H{"refresh_token": "Invalid JSON body"})
+	refreshToken := c.Query("refresh_token")
+	if refreshToken == "" {
+		response.Error(c, "refresh_token is required")
 		return
 	}
 
-	if err := validation.Validate.Struct(req); err != nil {
-		errors := validation.ParseValidationErrors(err, req)
-		response.Error(c, errors)
-		return
-	}
-
-	resp, fieldErrs, err := h.service.RefreshToken(req.RefreshToken)
-	if len(fieldErrs) > 0 {
-		response.Error(c, fieldErrs)
-		return
-	}
+	data, err := h.service.RefreshToken(refreshToken)
 	if err != nil {
-		response.ServerError(c, "Internal server error")
+		response.ServerError(c, err.Error())
 		return
 	}
 
-	response.Success(c, resp)
+	response.Success(c, data)
 }
 
 func (h *Handler) ChangePassword(c *gin.Context) {
+	email := c.GetString("email")
+
 	var req ChangePasswordRequest
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, gin.H{"request": "invalid json format"})
+		response.Error(c, err.Error())
 		return
 	}
 
-	if err := validation.Validate.Struct(req); err != nil {
-		response.Error(c, validation.ParseValidationErrors(err, req))
+	if err := h.validator.Struct(req); err != nil {
+		response.Error(c, err.Error())
 		return
 	}
 
-	authHeader := c.GetHeader("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		response.Error(c, gin.H{"token": "missing or invalid authorization header"})
-		return
-	}
-	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-
-	claims, err := h.authMiddleware.ParseAccessToken(tokenStr)
-	if err != nil {
-		response.Error(c, gin.H{"token": "invalid or expired access token"})
+	if err := h.service.ChangePassword(req, email); err != nil {
+		response.ServerError(c, err.Error())
 		return
 	}
 
-	errs, err := h.service.ChangePassword(req, claims.Email)
-	if len(errs) > 0 {
-		response.Error(c, errs)
-		return
-	}
-	if err != nil {
-		response.ServerError(c, "failed to change password")
-		return
-	}
-
-	response.Success(c, gin.H{"message": "password changed successfully"})
+	response.Success(c, "password updated successfully")
 }
 
 func (h *Handler) Logout(c *gin.Context) {
-	// Get Authorization header
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-		response.Error(c, gin.H{"token": "missing or invalid authorization header"})
+	email := c.GetString("email")
+	if err := h.service.Logout(email); err != nil {
+		response.ServerError(c, err.Error())
 		return
 	}
-	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-
-	// Parse access token to extract email
-	claims, err := h.authMiddleware.ParseAccessToken(tokenStr)
-	if err != nil {
-		response.Error(c, gin.H{"token": "invalid or expired access token"})
-		return
-	}
-
-	// Revoke refresh token from DB
-	errs, err := h.service.Logout(claims.Email)
-	if len(errs) > 0 {
-		response.Error(c, errs)
-		return
-	}
-	if err != nil {
-		response.ServerError(c, "failed to logout")
-		return
-	}
-
-	response.Success(c, gin.H{"message": "logout successful"})
+	response.Success(c, "logout successful")
 }
 
 func (h *Handler) ValidateToken(c *gin.Context) {
-	var req ValidateTokenRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, gin.H{"token": "Invalid JSON body"})
+	token := c.GetHeader("Authorization")
+	if token == "" {
+		response.Error(c, "Authorization header is required")
 		return
 	}
 
-	if err := validation.Validate.Struct(req); err != nil {
-		errors := validation.ParseValidationErrors(err, req)
-		response.Error(c, errors)
-		return
-	}
-
-	data, fieldErrs, err := h.service.ValidateToken(req.Token)
-	if len(fieldErrs) > 0 {
-		response.Error(c, fieldErrs)
-		return
-	}
+	data, err := h.service.ValidateToken(token)
 	if err != nil {
-		response.ServerError(c, "Internal server error")
+		response.ServerError(c, err.Error())
 		return
 	}
 
@@ -208,36 +152,20 @@ func (h *Handler) ValidateToken(c *gin.Context) {
 }
 
 func (h *Handler) GetServiceRoles(c *gin.Context) {
-	result, err := h.service.GetServiceRoles()
+	data, err := h.service.GetServiceRoles()
 	if err != nil {
-		response.ServerError(c, "failed to fetch service-role data")
+		response.ServerError(c, err.Error())
 		return
 	}
-	response.Success(c, result)
+	response.Success(c, data)
 }
 
 func (h *Handler) GetMe(c *gin.Context) {
-	authHeader := c.GetHeader("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		response.Error(c, gin.H{"token": "missing or invalid authorization header"})
-		return
-	}
-
-	accessToken := strings.TrimPrefix(authHeader, "Bearer ")
-
-	// Parse token using your JWT middleware
-	claims, err := h.authMiddleware.ParseAccessToken(accessToken)
+	email := c.GetString("email")
+	data, err := h.service.GetMe(email)
 	if err != nil {
-		response.Error(c, gin.H{"token": "invalid or expired access token"})
+		response.ServerError(c, err.Error())
 		return
 	}
-
-	// Fetch profile from service using email from claims
-	data, err := h.service.GetMe(claims.Email)
-	if err != nil {
-		response.ServerError(c, "failed to retrieve profile")
-		return
-	}
-
 	response.Success(c, data)
 }
