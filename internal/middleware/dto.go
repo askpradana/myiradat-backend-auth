@@ -1,4 +1,4 @@
-package auth
+package middleware
 
 type RefreshTokenClaims struct {
 	Email string `json:"email"`
@@ -6,8 +6,8 @@ type RefreshTokenClaims struct {
 
 type TokenServiceRole struct {
 	ServiceName string `json:"serviceName"`
-	RoleName    string `json:"roleName"`
 	ServiceCode string `json:"serviceCode"`
+	RoleName    string `json:"roleName"`
 }
 
 type AccessTokenClaims struct {

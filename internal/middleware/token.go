@@ -1,13 +1,13 @@
-package auth
+package middleware
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"myiradat-backend-auth/internal/configs"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"myiradat-backend-auth/internal/config"
 )
 
 type IJwtTokenGenerator interface {
@@ -18,10 +18,10 @@ type IJwtTokenGenerator interface {
 }
 
 type jwtGenerator struct {
-	config *config.JWTConfig
+	config *configs.JWTConfig
 }
 
-func NewJWTGenerator(cfg *config.JWTConfig) IJwtTokenGenerator {
+func NewJWTGenerator(cfg *configs.JWTConfig) IJwtTokenGenerator {
 	return &jwtGenerator{
 		config: cfg,
 	}

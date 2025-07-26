@@ -1,12 +1,12 @@
 package auth
 
 type RegisterRequest struct {
-	Name            string               `json:"name" validate:"required,name"`
-	NoHP            string               `json:"nohp" validate:"required,nohp"`
+	Name            string               `json:"name" validate:"required,min=2"`
+	NoHP            string               `json:"nohp" validate:"required"`
 	Email           string               `json:"email" validate:"required,email"`
 	Password        string               `json:"password" validate:"required,min=8"`
-	ConfirmPassword string               `json:"confirmPassword" validate:"eqfield=Password"`
-	Services        []ServiceRoleRequest `json:"services" validate:"required,dive"`
+	ConfirmPassword string               `json:"confirmPassword" validate:"required,eqfield=Password"`
+	Services        []ServiceRoleRequest `json:"services" validate:"required,dive,required"`
 }
 
 type ServiceRoleRequest struct {
@@ -57,6 +57,7 @@ type ChangePasswordRequest struct {
 type ServiceRoleDTO struct {
 	ServiceID   int       `json:"serviceId"`
 	ServiceName string    `json:"serviceName"`
+	ServiceCode string    `json:"serviceCode"`
 	Description string    `json:"description"`
 	RedirectURI string    `json:"redirectURI"`
 	Roles       []RoleDTO `json:"roles"`
@@ -77,10 +78,10 @@ type ServiceRoleForToken struct {
 
 type ServiceRoleResponse struct {
 	ServiceName     string `json:"serviceName"`
+	ServiceCode     string `json:"serviceCode"`
 	RoleName        string `json:"roleName"`
 	RoleDescription string `json:"roleDescription"`
 	RedirectUri     string `json:"redirect_uri"`
-	ServiceCode     string `json:"serviceCode"`
 	ServiceId       int    `json:"service_id"`
 	RoleId          int    `json:"role_id"`
 }

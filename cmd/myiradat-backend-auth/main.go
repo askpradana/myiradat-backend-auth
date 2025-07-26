@@ -1,53 +1,54 @@
+// @title Iradat Auth Service API
+// @version 1.0
+// @description This is the User Service API for Iradat project.
+// @host localhost:8000
+// @BasePath /
+
 package main
 
 import (
+	"log"
+	"myiradat-backend-auth/internal/auth"
+	// "myiradat-backend-auth/docs"
+	"myiradat-backend-auth/internal/configs"
+	"os"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"myiradat-backend-auth/internal/auth"
-	"myiradat-backend-auth/internal/config"
-	"myiradat-backend-auth/internal/database"
-	authMiddleware "myiradat-backend-auth/internal/middleware/auth"
-	"myiradat-backend-auth/internal/validation"
-	"time"
 )
 
 func main() {
-	config.LoadEnv()
-	database.InitDB()
-	validation.InitValidator()
+	configs.LoadEnv()
 
-	jwtConfig := config.InitJWTConfig()
+	// Load configurations
+	configs.ReloadDatabaseConfig()
+	// config.ReloadRedis()
 
-	jwtGenerator := authMiddleware.NewJWTGenerator(jwtConfig)
-
-	r := gin.Default()
-
-	authRepo := auth.NewRepository(database.DB)
-	authService := auth.NewService(authRepo, jwtGenerator)
-	authHandler := auth.NewHandler(authService, jwtGenerator)
-
-	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
-
-	authGroup := r.Group("/auth")
-	{
-		authGroup.POST("/register", authHandler.Register)
-		authGroup.POST("/login", authHandler.Login)
-		authGroup.POST("/refresh-token", authHandler.RefreshToken)
-		authGroup.POST("/change-password", authHandler.ChangePassword)
-		authGroup.POST("/logout", authHandler.Logout)
-		authGroup.GET("/service-roles", authHandler.GetServiceRoles)
-		authGroup.GET("/me", authHandler.GetMe)
-
-		//untuk keperluan testing jangan di expose ke luar
-		//authGroup.POST("/validate-token", authHandler.ValidateToken)
+	// Get HTTP port
+	httpPort := os.Getenv("PORT")
+	if httpPort == "" {
+		httpPort = "8001"
 	}
 
-	r.Run()
+	// docs.SetupSwagger(httpPort)
+
+	router := gin.Default()
+
+	// Add CORS middleware to allow all origins
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
+
+	auth.HttpHandler(router)
+
+	// router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	log.Printf("✅ Starting HTTP server on port %s (ENV=%s)\n", httpPort, os.Getenv("ENV"))
+	if err := router.Run(":" + httpPort); err != nil {
+		log.Fatalf("❌ Server failed to start: %v", err)
+	}
 }
